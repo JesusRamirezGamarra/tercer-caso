@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ramirez-jesus
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ramirez-jesus-configmap
+  namespace: ramirez-jesus
+data:
+  log-content: |
+    interesante DevOps
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ramirez-jesus-secret
+  namespace: ramirez-jesus
+type: Opaque
+data:
+  apellido_paterno: UmFtaXJleg== # Base64 encoded value for "Ramirez"
+  apellido_materno: R2FtYXJyYQ== # Base64 encoded value for "Gamarra"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ramirez-jesus-deployment
+  namespace: ramirez-jesus
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ramirez-jesus-app
+  template:
+    metadata:
+      labels:
+        app: ramirez-jesus-app
+    spec:
+      containers:
+      - name: app-nueva
+        image: jesusramirezgamarra/app-nueva:latest
+        ports:
+        - containerPort: 5000  # Cambia a 5000
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+        env:
+        - name: APELLIDO_PATERNO
+          valueFrom:
+            secretKeyRef:
+              name: ramirez-jesus-secret
+              key: apellido_paterno
+        - name: APELLIDO_MATERNO
+          valueFrom:
+            secretKeyRef:
+              name: ramirez-jesus-secret
+              key: apellido_materno
+      volumes:
+      - name: config-volume
+        configMap:
+          name: ramirez-jesus-configmap
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ramirez-jesus-service
+  namespace: ramirez-jesus
+spec:
+  type: LoadBalancer
+  selector:
+    app: ramirez-jesus-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000  # Cambia a 5000
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ramirez-jesus-cronjob
+  namespace: ramirez-jesus
+spec:
+  schedule: "*/4 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: curl-job
+            image: curlimages/curl:latest
+            args:
+            - /bin/sh
+            - -c
+            - curl -sS http://ramirez-jesus-service.ramirez-jesus.svc.cluster.local:80 || echo "Failed to reach service"
+          restartPolicy: OnFailure
